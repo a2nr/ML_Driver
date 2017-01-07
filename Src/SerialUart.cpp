@@ -11,10 +11,6 @@
 
 SerialUart *SerialForMsp;
 
-void InitMsp(UART_HandleTypeDef* huart);
-void DeInitMsp(UART_HandleTypeDef* huart);
-
-
 SerialUart::SerialUart(USART_TypeDef *_instance, uint32_t _baudrate) {
 	// TODO Auto-generated constructor stub
 	SerialForMsp = this;
@@ -106,19 +102,13 @@ void SerialUart::mspDeinit(UART_HandleTypeDef * ptrUartTd){
 		gpioUart.deInit(GPIO_PIN_2|GPIO_PIN_3);
 	}
 }
-void InitMsp(UART_HandleTypeDef* huart){
-	SerialForMsp->mspInit(huart);
-}
-void DeInitMsp(UART_HandleTypeDef* huart){
-	SerialForMsp->mspDeinit(huart);
-}
 void HAL_UART_MspInit(UART_HandleTypeDef* huart)
 {
-	InitMsp(huart);
+	SerialForMsp->mspInit(huart);
 }
 
 void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 {
-	DeInitMsp(huart);
+	SerialForMsp->mspDeinit(huart);
 }
 
