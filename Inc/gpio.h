@@ -25,9 +25,11 @@ private:
 	void enableClk(GPIO_TypeDef * _GPIO);
 public:
 	gpio(){};
-	gpio(GPIO_TypeDef * _GPIOx);
-	void init(GPIO_InitTypeDef * GpioInitStructure);
+	gpio(GPIO_TypeDef * _GPIOx );
+	~gpio();
 
+	void init(GPIO_InitTypeDef * GpioInitStructure);
+	void deInit(uint16_t _pin);
 };
 
 class digitalOut: public gpio{
@@ -35,6 +37,7 @@ private:
 	uint16_t _pin;
 	gpio *ptrGpio;
 public:
+	digitalOut(){};
 	digitalOut(gpio *gpiox, uint16_t _pin);
 	void write(GPIO_PinState _state);
 };
@@ -44,6 +47,7 @@ private:
 	uint16_t _pin;
 	gpio *ptrGpio;
 public:
+	digitalIn(){};
 	digitalIn(gpio *gpiox, uint16_t _pin);
 	GPIO_PinState read();
 
