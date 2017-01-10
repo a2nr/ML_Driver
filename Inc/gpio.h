@@ -17,14 +17,17 @@
 class digitalOut;
 class digitalIn;
 
+#define ENABLE true
+#define DISABLE false
+
 class gpio{
 friend class digitalOut;
 friend class digitalIn;
 private:
 	GPIO_TypeDef * _GPIO;
-	void enableClk(GPIO_TypeDef * _GPIO);
+	void gpioClk(GPIO_TypeDef * _GPIO, bool _state);
 public:
-	gpio(){};
+	gpio():_GPIO(NULL){};
 	gpio(GPIO_TypeDef * _GPIOx );
 	~gpio();
 
@@ -37,8 +40,9 @@ private:
 	uint16_t _pin;
 	gpio *ptrGpio;
 public:
-	digitalOut(){};
+	digitalOut(){this->ptrGpio=NULL; this->_pin=0;};
 	digitalOut(gpio *gpiox, uint16_t _pin);
+	void begin();
 	void write(GPIO_PinState _state);
 };
 
@@ -47,8 +51,9 @@ private:
 	uint16_t _pin;
 	gpio *ptrGpio;
 public:
-	digitalIn(){};
+	digitalIn(){this->ptrGpio=NULL; this->_pin=0;};
 	digitalIn(gpio *gpiox, uint16_t _pin);
+	void begin();
 	GPIO_PinState read();
 
 };

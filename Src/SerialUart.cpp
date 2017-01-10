@@ -8,20 +8,24 @@
 #include "SerialUart.h"
 #include "error.h"
 #include "gpio.h"
+#include <string.h>
 
 SerialUart *SerialForMsp;
 
-SerialUart::SerialUart(USART_TypeDef *_instance, uint32_t _baudrate) {
+SerialUart::SerialUart(USART_TypeDef *_instance) {
 	// TODO Auto-generated constructor stub
 	SerialForMsp = this;
 	uartTd.Instance = _instance;
-	uartTd.Init.BaudRate = _baudrate;//115200;
 	uartTd.Init.WordLength = UART_WORDLENGTH_8B;
 	uartTd.Init.StopBits = UART_STOPBITS_1;
 	uartTd.Init.Parity = UART_PARITY_NONE;
 	uartTd.Init.Mode = UART_MODE_TX_RX;
 	uartTd.Init.HwFlowCtl = UART_HWCONTROL_NONE;
 	uartTd.Init.OverSampling = UART_OVERSAMPLING_16;
+}
+void SerialUart::begin(uint32_t _baudrate){
+
+	uartTd.Init.BaudRate = _baudrate;//115200;
 	if (HAL_UART_Init(&this->uartTd) != HAL_OK)
 	{
 		Error.raiseError();
@@ -36,13 +40,16 @@ SerialUart::~SerialUart() {
 	}
 }
 
-void SerialUart::clkEnable(UART_HandleTypeDef * ptrUartTd){
+void SerialUart::uartClk(UART_HandleTypeDef * ptrUartTd, bool _state){
 	__IO uint32_t tmpreg = 0x000U;
 	while(tmpreg < 3){
 		if(ptrUartTd->Instance == (USART_TypeDef*)(USART2+(0x400U * tmpreg))){
-			SET_BIT(RCC->APB1ENR, RCC_APB1ENR_USART2EN << (tmpreg));
+			if(_state == true)
+				SET_BIT(RCC->APB1ENR, RCC_APB1ENR_USART2EN << (tmpreg));
+			else
+				RCC->APB1ENR &= ~(RCC_APB1ENR_USART2EN << (tmpreg));
 			/* Delay after an RCC peripheral clock enabling */
-			tmpreg = READ_BIT(RCC->APB1ENR, RCC_APB1ENR_USART2EN << (tmpreg));
+			tmpreg = (RCC_APB1ENR_USART2EN << (tmpreg));
 			UNUSED(tmpreg);
 			break;
 		}
@@ -50,24 +57,16 @@ void SerialUart::clkEnable(UART_HandleTypeDef * ptrUartTd){
 	}
 }
 
-void SerialUart::clkDisable(UART_HandleTypeDef * ptrUartTd){
-	__IO uint32_t tmpreg = 0x000U;
-	while(tmpreg < 3){
-		if(ptrUartTd->Instance == (USART_TypeDef*)(USART2+(0x400U * tmpreg))){
-			RCC->APB1ENR &= ~(RCC_APB1ENR_USART2EN << (tmpreg));
-			/* Delay after an RCC peripheral clock enabling */
-			tmpreg = READ_BIT(RCC->APB1ENR, RCC_APB1ENR_USART2EN << (tmpreg));
-			UNUSED(tmpreg);
-			break;
-		}
-		tmpreg++;
-	}
+void SerialUart::write(const char  * _someString){
+	uint32_t size = strlen(_someString);
+	memcpy(&TxBuff[0],_someString,size);
+
+	HAL_UART_Transmit(&this->uartTd,TxBuff,strlen(_someString),500);
 }
 
 void SerialUart::mspInit(UART_HandleTypeDef * ptrUartTd){
 	GPIO_InitTypeDef GPIO_InitStruct;
-
-	this->clkEnable(ptrUartTd);
+	this->uartClk(ptrUartTd,ENABLE);
 
 	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
 	GPIO_InitStruct.Pull = GPIO_PULLUP;
@@ -89,26 +88,30 @@ void SerialUart::mspInit(UART_HandleTypeDef * ptrUartTd){
 }
 
 void SerialUart::mspDeinit(UART_HandleTypeDef * ptrUartTd){
-	if(ptrUartTd->Instance==USART2)
-	{
+	uint16_t _pin;
+	if(ptrUartTd->Instance == USART2){
 		gpio gpioUart(GPIOA);
-		/* Peripheral clock disable */
-		this->clkDisable(ptrUartTd);
-
 		/**USART2 GPIO Configuration
 		PA2     ------> USART2_TX
 		PA3     ------> USART2_RX
 		*/
-		gpioUart.deInit(GPIO_PIN_2|GPIO_PIN_3);
+		_pin = GPIO_PIN_2|GPIO_PIN_3;
+
+		/* Peripheral clock disable */
+		this->uartClk(ptrUartTd,DISABLE);
+		gpioUart.deInit(_pin);
 	}
 }
-void HAL_UART_MspInit(UART_HandleTypeDef* huart)
-{
-	SerialForMsp->mspInit(huart);
-}
 
-void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
-{
-	SerialForMsp->mspDeinit(huart);
+extern "C" {
+	void HAL_UART_MspInit(UART_HandleTypeDef* huart)
+	{
+		SerialForMsp->mspInit(huart);
+	}
+
+	void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
+	{
+		SerialForMsp->mspDeinit(huart);
+	}
 }
 
