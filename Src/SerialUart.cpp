@@ -6,6 +6,8 @@
  */
 
 #include "SerialUart.h"
+#ifdef HAL_UART_MODULE_ENABLED
+
 #include "error.h"
 #include "gpio.h"
 #include <string.h>
@@ -114,4 +116,6 @@ extern "C" {
 		SerialForMsp->mspDeinit(huart);
 	}
 }
+
+#endif //#ifdef HAL_UART_MODULE_ENABLED
 

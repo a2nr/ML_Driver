@@ -5,7 +5,7 @@
  *      Author: mori3rti
  */
 
-#include <gpio.h>
+#include "gpio.h"
 #ifdef HAL_GPIO_MODULE_ENABLED
 
 gpio::gpio(GPIO_TypeDef * _GPIOx){
