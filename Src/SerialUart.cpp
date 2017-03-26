@@ -6,17 +6,17 @@
  */
 
 #include "SerialUart.h"
+#include "stm32f4xx_hal.h"
 #ifdef HAL_UART_MODULE_ENABLED
 
 #include "error.h"
 #include "gpio.h"
 #include <string.h>
 
-SerialUart *SerialForMsp;
+void UART_ERROR(void);
 
 SerialUart::SerialUart(USART_TypeDef *_instance) {
-	// TODO Auto-generated constructor stub
-	SerialForMsp = this;
+
 	uartTd.Instance = _instance;
 	uartTd.Init.WordLength = UART_WORDLENGTH_8B;
 	uartTd.Init.StopBits = UART_STOPBITS_1;
@@ -24,10 +24,15 @@ SerialUart::SerialUart(USART_TypeDef *_instance) {
 	uartTd.Init.Mode = UART_MODE_TX_RX;
 	uartTd.Init.HwFlowCtl = UART_HWCONTROL_NONE;
 	uartTd.Init.OverSampling = UART_OVERSAMPLING_16;
+
+	this->Rhead =0;
+	this->Roffset =0;
+	this->Thead =0;
+	this->Toffset =0;
 }
 void SerialUart::begin(uint32_t _baudrate){
 
-	uartTd.Init.BaudRate = _baudrate;//115200;
+	uartTd.Init.BaudRate = _baudrate;
 	if (HAL_UART_Init(&this->uartTd) != HAL_OK)
 	{
 		Error.raiseError();
@@ -36,12 +41,16 @@ void SerialUart::begin(uint32_t _baudrate){
 }
 
 SerialUart::~SerialUart() {
-	// TODO Auto-generated destructor stub
+
 	if(HAL_UART_DeInit(&this->uartTd) != HAL_OK){
 		Error.raiseError();
 	}
 }
-
+/*
+ * @param UART_HandleTypeDef * ptrUartTd -> ini UART Handle TypeDef
+ * @param bool _state -> ENABLE Clock
+ * 						 DISABLE Clock
+ */
 void SerialUart::uartClk(UART_HandleTypeDef * ptrUartTd, bool _state){
 	__IO uint32_t tmpreg = 0x000U;
 	while(tmpreg < 3){
@@ -61,60 +70,127 @@ void SerialUart::uartClk(UART_HandleTypeDef * ptrUartTd, bool _state){
 
 void SerialUart::write(const char  * _someString){
 	uint32_t size = strlen(_someString);
-	memcpy(&TxBuff[0],_someString,size);
+	memcpy(&this->TxBuff[0],_someString,size);
 
-	HAL_UART_Transmit(&this->uartTd,TxBuff,strlen(_someString),500);
+	if (HAL_UART_Transmit(&this->uartTd,(uint8_t*)this->TxBuff,size,500) != HAL_OK)
+		Error.raiseError();
 }
 
-void SerialUart::mspInit(UART_HandleTypeDef * ptrUartTd){
-	GPIO_InitTypeDef GPIO_InitStruct;
-	this->uartClk(ptrUartTd,ENABLE);
+void SerialUart::write(uint8_t _chr) {
+	if (HAL_UART_Transmit(&this->uartTd,&_chr,1,500) != HAL_OK)
+		Error.raiseError();
+}
 
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_PULLUP;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+uint8_t SerialUart::read(void){
+	if (this->Rhead > this->Roffset)
+		return this->RxBuff[this->Roffset ++];
+	return 0;
+}
 
-	if(ptrUartTd->Instance==USART2)
-	{
-		gpio gpioUart(GPIOA);
-		/* Peripheral clock enable */
-		//__HAL_RCC_USART2_CLK_ENABLE();
-		/**USART2 GPIO Configuration
-		PA2     ------> USART2_TX
-		PA3     ------> USART2_RX
-		*/
-		GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
-		GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-		gpioUart.init(&GPIO_InitStruct);
+
+uint8_t SerialUart::available(void){
+	HAL_UART_StateTypeDef State ;
+	if (this->Rhead > this->Roffset){
+		UNUSED(State);
+		return this->Rhead - this->Roffset;
+	} else {
+		State = HAL_UART_GetState(&this->uartTd);
 	}
+	if ( (State == HAL_UART_STATE_READY) )
+		if(HAL_UART_Receive_IT(&this->uartTd, &this->RxBuff[0],MAX_BUFFER) == HAL_OK){};
+	return 0;
+
 }
 
-void SerialUart::mspDeinit(UART_HandleTypeDef * ptrUartTd){
-	uint16_t _pin;
-	if(ptrUartTd->Instance == USART2){
-		gpio gpioUart(GPIOA);
-		/**USART2 GPIO Configuration
-		PA2     ------> USART2_TX
-		PA3     ------> USART2_RX
-		*/
-		_pin = GPIO_PIN_2|GPIO_PIN_3;
+void SerialUart::RxComplete(void){
 
-		/* Peripheral clock disable */
-		this->uartClk(ptrUartTd,DISABLE);
-		gpioUart.deInit(_pin);
+		this->Roffset =0;
+		this->Rhead = this->RoffsetHigh;
+		this->RoffsetHigh = 0;
+}
+
+
+void SerialUart::IRQ(void){
+	//baca data dari register dan mengakses RxComplate
+	HAL_UART_IRQHandler(&uartTd);
+
+	if ( (this->RxBuff[this->RoffsetHigh] != '\n')
+			&& (this->RxBuff[this->RoffsetHigh] != '\r')
+			&& (this->RxBuff[this->RoffsetHigh] != '\0')
+			)
+		this->RoffsetHigh++;
+	else
+		HAL_UART_AbortReceive_IT(&this->uartTd);
+}
+
+
+void SerialUart::HardwareError(void){
+	uint32_t Error = HAL_UART_GetError(&this->uartTd);
+	switch(Error){
+		case HAL_UART_ERROR_NONE : 	/*!< No error            */
+			break;
+		case HAL_UART_ERROR_PE : 	/*!< Parity error        */
+			break;
+		case HAL_UART_ERROR_NE : 	/*!< Noise error         */
+			break;
+		case HAL_UART_ERROR_FE : 	/*!< Frame error         */
+			break;
+		case HAL_UART_ERROR_ORE : 	/*!< Overrun error       */
+			//TODO getstat dulu baru ke sini
+			if(HAL_UART_Receive_IT(&this->uartTd, (uint8_t *)this->RxBuff,MAX_BUFFER) == HAL_OK)
+				break;
+		case HAL_UART_ERROR_DMA : 	/*!< DMA transfer error  */
+			break;
 	}
+//	HAL_UART_AbortReceive_IT(&this->uartTd);
+//	if(this->uartTd.ErrorCode & )
 }
-
 extern "C" {
+	void HAL_UART_AbortReceiveCpltCallback(UART_HandleTypeDef *huart){
+		if (huart->Instance == USART2){
+			Serial.RxComplete();
+		}else{
+			Error.raiseError();
+		}
+	}
+	void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+	{
+
+		if (huart->Instance == USART2){
+			Serial.RxComplete();
+		}else{
+			Error.raiseError();
+		}
+	}
+
+
 	void HAL_UART_MspInit(UART_HandleTypeDef* huart)
 	{
-		SerialForMsp->mspInit(huart);
+		if (huart->Instance == USART2){
+			Serial.mspInit();
+		}else{
+			Error.raiseError();
+		}
 	}
 
 	void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 	{
-		SerialForMsp->mspDeinit(huart);
+		if (huart->Instance == USART2){
+			Serial.mspDeinit();
+		}else{
+			Error.raiseError();
+		}
 	}
+
+
+	void HAL_UART_ErrorCallback (UART_HandleTypeDef *huart){
+		if (huart->Instance == USART2){
+			Serial.HardwareError();
+		}else{
+			Error.raiseError();
+		}
+	}
+
 }
 
 #endif //#ifdef HAL_UART_MODULE_ENABLED

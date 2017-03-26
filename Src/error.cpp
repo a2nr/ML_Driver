@@ -11,12 +11,10 @@ void dummyFnc(void);
 void (*fnc) (void);
 
 error::error(){
-	// TODO Auto-generated constructor stub
 	 fnc = &dummyFnc;
 }
 
 error::~error() {
-	// TODO Auto-generated destructor stub
 }
 
 void error::raiseError(){
