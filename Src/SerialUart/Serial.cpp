@@ -14,9 +14,6 @@
 
 SerialUart2 Serial;
 
-uint8_t SerialUart::TxBuff[MAX_BUFFER] ;
-uint8_t SerialUart::RxBuff[MAX_BUFFER] ;
-
 void SerialUart2::mspInit(void){
 	GPIO_InitTypeDef GPIO_InitStruct;
 	gpio gpioUart(GPIOA);

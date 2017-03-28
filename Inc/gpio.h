@@ -20,38 +20,35 @@ class digitalIn;
 #define ENABLE true
 #define DISABLE false
 
-class gpio{
-friend class digitalOut;
-friend class digitalIn;
-private:
-	GPIO_TypeDef * _GPIO;
+class gpio {
+protected:
 	void gpioClk(GPIO_TypeDef * _GPIO, bool _state);
 public:
+	GPIO_TypeDef * _GPIO;
+	gpio(GPIO_TypeDef * _GPIOx ) : _GPIO(_GPIOx){};
 	gpio():_GPIO(NULL){};
-	gpio(GPIO_TypeDef * _GPIOx );
-	~gpio();
+	virtual ~gpio(){};
 
 	void init(GPIO_InitTypeDef * GpioInitStructure);
 	void deInit(uint16_t _pin);
 };
 
-class digitalOut: public gpio{
+class digitalOut : public gpio{
 private:
 	uint16_t _pin;
 	gpio *ptrGpio;
 public:
-	digitalOut(){this->ptrGpio=NULL; this->_pin=0;};
 	digitalOut(gpio *gpiox, uint16_t _pin);
-	void begin();
+	void begin(void);
 	void write(GPIO_PinState _state);
+	void toggle(void);
 };
 
-class digitalIn: public gpio{
+class digitalIn : public gpio{
 private:
 	uint16_t _pin;
 	gpio *ptrGpio;
 public:
-	digitalIn(){this->ptrGpio=NULL; this->_pin=0;};
 	digitalIn(gpio *gpiox, uint16_t _pin);
 	void begin();
 	GPIO_PinState read();
