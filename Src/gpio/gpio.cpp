@@ -60,6 +60,11 @@ static void gpio_enableClock(GPIO_TypeDef *GPIOx)
 	LL_AHB1_GRP1_EnableClock((LL_AHB1_GRP1_PERIPH_GPIOA << addresMap));
 }
 
+void gpio::initFromStruct(LL_GPIO_InitTypeDef *initStruct)
+{
+	gpio_enableClock(this->GPIOx);
+	LL_GPIO_Init(this->GPIOx, initStruct);
+}
 void gpio::asOutput(void)
 {
 	LL_GPIO_InitTypeDef GPIO_InitStruct;
@@ -75,7 +80,9 @@ void gpio::asOutput(void)
 	GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
 	GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
 	GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-	LL_GPIO_Init(this->GPIOx, &GPIO_InitStruct);
+	this->initFromStruct(&GPIO_InitStruct);
+	// LL_GPIO_Init(this->GPIOx, &GPIO_InitStruct);
+
 }
 
 void gpio::asInput(void)
@@ -92,7 +99,8 @@ void gpio::asInput(void)
 	GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
 	GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
 	GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-	LL_GPIO_Init(this->GPIOx, &GPIO_InitStruct);
+	this->initFromStruct(&GPIO_InitStruct);
+	// LL_GPIO_Init(this->GPIOx, &GPIO_InitStruct);
 }
 
 #else

@@ -12,35 +12,40 @@
 #include "stm32f4xx_ll_bus.h"
 #include "stm32f4xx_ll_gpio.h"
 
+#include "SerialUart.h"
+
 class gpio
 {
+	friend class uart_base;
 private:
 	/* data */
 	GPIO_TypeDef *GPIOx;
 	uint8_t pin;
 
+	void initFromStruct(LL_GPIO_InitTypeDef * initStruct);
 public:
 	gpio() : GPIOx(nullptr), pin(0) {}
 	gpio(GPIO_TypeDef *GPIOx, uint32_t pin) : GPIOx(GPIOx), pin(pin) {}
+	gpio(GPIO_TypeDef *GPIOx) : GPIOx(GPIOx), pin(0) {}
 
 	void asOutput(void);
 	void asInput(void);
 
-	inline void setPullDown(void)
+	void setPullDown(void)
 	{
 		LL_GPIO_SetPinPull(this->GPIOx, 0x1U << this->pin, LL_GPIO_PULL_DOWN);
 	}
-	inline void setPullUp(void)
+	void setPullUp(void)
 	{
 		LL_GPIO_SetPinPull(this->GPIOx, 0x1U << this->pin, LL_GPIO_PULL_UP);
 	}
-	inline void toggle(){
+	void toggle(){
 		LL_GPIO_TogglePin(this->GPIOx, 0x1U << this->pin);
 	}
-	inline void set(uint8_t bit) {
+	void set(uint8_t bit) {
 		LL_GPIO_SetOutputPin(this->GPIOx, (bit == 0x1U) ? 0x1U << this->pin :(0x1U << this->pin) << 16 );
 	}
-	inline uint8_t get(void)
+	uint8_t get(void)
 	{
 		return LL_GPIO_IsInputPinSet(this->GPIOx, 0x1U << this->pin) != 0 ? 0x1U : 0x0U;
 	}

@@ -6,6 +6,7 @@
  */
 
 #include "SerialUart.h"
+#include "gpio.h"
 
 #ifdef USE_FULL_LL_DRIVER
 uart_error uart_base::init(uint32_t baudrate)
@@ -31,20 +32,26 @@ uart_error uart_base::init(uint32_t baudrate)
   */
 	GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
 	GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
 	GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-	GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
-	GPIO_InitStruct.Alternate = LL_GPIO_AF_7;
+	GPIO_InitStruct.Alternate = cfg.ioaf;
 	if (cfg.txgpio != cfg.rxgpio)
 	{
-		GPIO_InitStruct.Pin = cfg.txpin;
-		LL_GPIO_Init((GPIO_TypeDef *)cfg.txgpio, &GPIO_InitStruct);
+		gpio rxgpio((GPIO_TypeDef *)cfg.rxgpio);
+		gpio txgpio((GPIO_TypeDef *)cfg.txgpio);
+
+
 		GPIO_InitStruct.Pin = cfg.rxpin;
-		LL_GPIO_Init((GPIO_TypeDef *)cfg.rxgpio, &GPIO_InitStruct);
+		rxgpio.initFromStruct(&GPIO_InitStruct);
+
+		GPIO_InitStruct.Pin = cfg.txpin;
+		txgpio.initFromStruct(&GPIO_InitStruct);
 	}
 	else
 	{
-		GPIO_InitStruct.Pin = cfg.txpin | cfg.rxpin;
-		LL_GPIO_Init((GPIO_TypeDef *)cfg.txgpio, &GPIO_InitStruct);
+		gpio rxtxgpio((GPIO_TypeDef *)cfg.txgpio);
+		GPIO_InitStruct.Pin = cfg.rxpin | cfg.txpin;
+		rxtxgpio.initFromStruct(&GPIO_InitStruct);
 	}
 
 	/* USART1 interrupt Init */
@@ -64,15 +71,45 @@ uart_error uart_base::init(uint32_t baudrate)
 
 	// LL_USART_Enable((USART_TypeDef *)cfg.uartx);
 }
-uint32_t uart_base::read(uint8_t *pByte, uint32_t len)
+uint32_t uart_base::read(uint8_t *pByte, uint32_t len, uint32_t timeout)
 {
+	USART_TypeDef *myUsart;
+	uint32_t actualLen = 0;
+
+	myUsart = (USART_TypeDef *)this->cfg.uartx;
+	LL_USART_Enable(myUsart);
+	LL_USART_SetTransferDirection(myUsart, LL_USART_DIRECTION_NONE);
+	LL_USART_EnableDirectionRx(myUsart);
+
+	while (len--)
+	{
+
+		while (!LL_USART_IsActiveFlag_RXNE(myUsart))
+		{
+			/* waiting for Shift buffer copy the data*/
+		}
+		if (LL_USART_IsActiveFlag_FE(myUsart))
+		{
+			/* break detected */
+			goto end_receive;
+		}
+		pByte[actualLen] = LL_USART_ReceiveData8(myUsart);
+		actualLen++;
+	}
+end_receive:
+	LL_USART_ClearFlag_RXNE(myUsart);
+	LL_USART_DisableDirectionRx(myUsart);
+	LL_USART_Disable(myUsart);
+
 	/*return actual len*/
-	return 0x00; 
+	return actualLen;
 }
 void uart_base::write(const uint8_t *pByte, uint32_t len)
 {
 	USART_TypeDef *myUsart = (USART_TypeDef *)this->cfg.uartx;
 	LL_USART_Enable(myUsart);
+	LL_USART_SetTransferDirection(myUsart, LL_USART_DIRECTION_NONE);
+	LL_USART_EnableDirectionTx(myUsart);
 
 	while (len--)
 	{
@@ -84,11 +121,14 @@ void uart_base::write(const uint8_t *pByte, uint32_t len)
 		LL_USART_TransmitData8(myUsart, *(pByte++));
 	}
 
+	// LL_USART_RequestBreakSending(myUsart);
+
+	while (!LL_USART_IsActiveFlag_TC(myUsart))
+	{
+		/* waiting for last frame sent */
+	}
+	LL_USART_DisableDirectionTx(myUsart);
 	LL_USART_Disable(myUsart);
-}
-uint8_t uart_base::available(void)
-{
-	return 0;
 }
 #elif HAL_UART_MODULE_ENABLED
 
